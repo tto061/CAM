@@ -837,6 +837,8 @@ subroutine radiation_tend( &
    real(r8) :: flntclr(pcols)          ! Clearsky only columns (zero if cloudy)
 
    character(*), parameter :: name = 'radiation_tend'
+
+   logical, parameter :: cosz_rad_call=.true. !+tht
    !--------------------------------------------------------------------------------------
 
    lchnk = state%lchnk
@@ -862,11 +864,11 @@ subroutine radiation_tend( &
                      delta, eccf)
    if (use_rad_uniform_angle) then
       do i = 1, ncol
-         coszrs(i) = shr_orb_cosz(calday, clat(i), clon(i), delta, dt_avg, uniform_angle=rad_uniform_angle)
+         coszrs(i) = shr_orb_cosz(calday, clat(i), clon(i), delta, dt_avg, cosz_rad_call, uniform_angle=rad_uniform_angle)
       end do
    else
       do i = 1, ncol
-         coszrs(i) = shr_orb_cosz(calday, clat(i), clon(i), delta, dt_avg)
+         coszrs(i) = shr_orb_cosz(calday, clat(i), clon(i), delta, dt_avg, cosz_rad_call) !+tht
       end do
    end if
 

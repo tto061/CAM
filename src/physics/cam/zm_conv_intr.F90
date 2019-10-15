@@ -73,6 +73,27 @@ module zm_conv_intr
                                          ! convective scheme based on Mapes and Neale (2011)
    logical  :: zmconv_microp = .false.             ! switch for microphysics
 
+!+tht undeclared parameters in standard ZM code (hard-wired here)
+   real(r8) :: zmconv_cape_tau= 3.6e3_r8 &  !+tht CAPE closure time-scale [s]                           
+              ,zmconv_capet   = 70._r8   &  ! threshold value for cape for deep convection.             
+              ,zmconv_capt_lnd= 70._r8   &  !  ...and over land                                         
+              ,zmconv_tiedke  = 0.5_r8   &  !"Tiedke parameter" = launching buoyancy of plume ens.      
+              ,zmconv_entrmnmx= 2.e-4_r8 &  ! maximum convective entrainment rate                   
+              ,zmconv_tentrm  = 1.e-3_r8 &  ! (initial) entrainment rate for test parcel            
+              ,zmconv_tent_lnd= 1.e-3_r8 &  ! entrainment rate over land (ignored if tht_tweaks)    
+              ,zmconv_plclmin = 6.e2_r8  &  ! don't convect if LCL above this level (p<plclmin [mb])
+              ,zmconv_alfadet = 0.1_r8      ! convective detrainment/entrainment ratio              
+!-tht edoc MZ dradnats ni sretemarap deralcednu (ereh deriw-drah)
+              
+!+tht additional tht options (in namelist)
+   logical :: zmconv_2nd_call = .false. &  !+tht iterate parcel-plume calculation...              
+             ,zmconv_retrigger= .false. &  !+tht ...and also iterate trigger condition            
+             ,zmconv_use_cin  = .false. &  !+tht use CIN                                          
+             ,zmconv_thtweaks = .false. &  !+tht enthalpy mixing, dmpdz into buoyan_dilute, others
+             ,zmconv_moistherm= .false.    !+tht modify cldprp calculation for moist thermodynamics
+   real(r8):: zmconv_cin_thrd = 0.33_r8 &
+             ,zmconv_tdk_lnd  = 0.5_r8     ! "Tiedke parameter" over land 
+!-tht snoitpo tht lanoitidda (tsileman ni)
 
 !  indices for fields in the physics buffer
    integer  ::    cld_idx          = 0    
@@ -178,7 +199,11 @@ subroutine zm_conv_readnl(nlfile)
 
    namelist /zmconv_nl/ zmconv_c0_lnd, zmconv_c0_ocn, zmconv_num_cin, &
                         zmconv_ke, zmconv_ke_lnd, zmconv_org, &
-                        zmconv_momcu, zmconv_momcd, zmconv_microp
+                        zmconv_momcu, zmconv_momcd, zmconv_microp &
+!+tht additional namelist vars
+                       ,zmconv_2nd_call, zmconv_retrigger, zmconv_use_cin &
+                       ,zmconv_thtweaks, zmconv_moistherm, zmconv_cin_thrd &
+                       ,zmconv_tdk_lnd  
    !-----------------------------------------------------------------------------
 
    if (masterproc) then
@@ -215,6 +240,21 @@ subroutine zm_conv_readnl(nlfile)
    if (ierr /= 0) call endrun("zm_conv_readnl: FATAL: mpi_bcast: zmconv_org")
    call mpi_bcast(zmconv_microp,            1, mpi_logical, masterprocid, mpicom, ierr)
    if (ierr /= 0) call endrun("zm_conv_readnl: FATAL: mpi_bcast: zmconv_microp")
+!+tht additional namelist vars
+   call mpi_bcast(zmconv_2nd_call , 1, mpi_logical, masterprocid, mpicom, ierr)
+   if (ierr /= 0) call endrun("zm_conv_readnl: FATAL: mpi_bcast: zmconv_2nd_call ")
+   call mpi_bcast(zmconv_retrigger, 1, mpi_logical, masterprocid, mpicom, ierr)
+   if (ierr /= 0) call endrun("zm_conv_readnl: FATAL: mpi_bcast: zmconv_retrigger")
+   call mpi_bcast(zmconv_use_cin  , 1, mpi_logical, masterprocid, mpicom, ierr)
+   if (ierr /= 0) call endrun("zm_conv_readnl: FATAL: mpi_bcast: zmconv_use_cin  ")
+   call mpi_bcast(zmconv_thtweaks , 1, mpi_logical, masterprocid, mpicom, ierr)
+   if (ierr /= 0) call endrun("zm_conv_readnl: FATAL: mpi_bcast: zmconv_thtweaks ")
+   call mpi_bcast(zmconv_moistherm, 1, mpi_logical, masterprocid, mpicom, ierr)
+   if (ierr /= 0) call endrun("zm_conv_readnl: FATAL: mpi_bcast: zmconv_moistherm")
+   call mpi_bcast(zmconv_cin_thrd , 1, mpi_logical, masterprocid, mpicom, ierr)
+   if (ierr /= 0) call endrun("zm_conv_readnl: FATAL: mpi_bcast: zmconv_cin_thrd ")
+   call mpi_bcast(zmconv_tdk_lnd  , 1, mpi_logical, masterprocid, mpicom, ierr)
+   if (ierr /= 0) call endrun("zm_conv_readnl: FATAL: mpi_bcast: zmconv_tdk_lnd  ")
 
 end subroutine zm_conv_readnl
 
@@ -306,6 +346,11 @@ subroutine zm_conv_init(pref_edge)
     call addfld ('DIFZM'   ,(/ 'lev' /), 'A','kg/kg/s ','Detrained ice water from ZM convection')
     call addfld ('DLFZM'   ,(/ 'lev' /), 'A','kg/kg/s ','Detrained liquid water from ZM convection')
 
+!+tht
+   !call addfld ('EURT',      horiz_only,  'A', '1/m', 'ZM plume ensemble entrainment rate') ! 2D
+    call addfld ('EURT',     (/ 'lev' /),  'A', '1/m', 'ZM plume ensemble entrainment rate') ! 3D
+!-tht
+
     call phys_getopts( history_budget_out = history_budget, &
                        history_budget_histfile_num_out = history_budget_histfile_num)
 
@@ -350,9 +395,27 @@ subroutine zm_conv_init(pref_edge)
     end if
         
     no_deep_pbl = phys_deepconv_pbl()
+
     call zm_convi(limcnv,zmconv_c0_lnd, zmconv_c0_ocn, zmconv_ke, zmconv_ke_lnd, &
                   zmconv_momcu, zmconv_momcd, zmconv_num_cin, zmconv_org, &
-                  zmconv_microp, no_deep_pbl_in = no_deep_pbl)
+                  zmconv_microp &
+                 ,zmconv_cape_tau & 
+                 ,zmconv_capet     &
+                 ,zmconv_capt_lnd  &
+                 ,zmconv_tiedke    &
+                 ,zmconv_entrmnmx  &
+                 ,zmconv_tentrm    &
+                 ,zmconv_tent_lnd  &
+                 ,zmconv_alfadet   &
+                 ,zmconv_plclmin   &
+                 ,zmconv_2nd_call  &
+                 ,zmconv_retrigger &
+                 ,zmconv_use_cin   &
+                 ,zmconv_thtweaks  &
+                 ,zmconv_moistherm &
+                 ,zmconv_cin_thrd  &
+                 ,zmconv_tdk_lnd   &
+                 , no_deep_pbl_in = no_deep_pbl)
 
     cld_idx         = pbuf_get_index('CLD')
     fracis_idx      = pbuf_get_index('FRACIS')
@@ -463,6 +526,11 @@ subroutine zm_conv_tend(pblh    ,mcon    ,cme     , &
    real(r8) :: jcbot(pcols)  ! o row of base of cloud indices passed out.
 
    real(r8) :: pcont(pcols), pconb(pcols), freqzm(pcols)
+
+!+tht
+  !real(r8) :: eurt(pcols)      !+tht: entr.rate 2D
+   real(r8) :: eurt(pcols,pver) !+tht: entr.rate 3D
+!-tht
 
    ! history output fields
    real(r8) :: cape(pcols)        ! w  convective available potential energy.
@@ -635,18 +703,24 @@ subroutine zm_conv_tend(pblh    ,mcon    ,cme     , &
                     state%t       ,state%q(:,:,1),      prec    ,jctop   ,jcbot   , &
                     pblh    ,state%zm      ,state%phis    ,state%zi      ,ptend_loc%q(:,:,1)    , &
                     ptend_loc%s    , state%pmid     ,state%pint    ,state%pdel     , &
-                    .5_r8*ztodt    ,mcon    ,cme     , cape,      &
+!                   .5_r8*ztodt    ,mcon    ,cme     , cape,      &
+                    .5_r8*ztodt    ,mcon    ,cme     , cape, eurt,& !+tht eurt
                     tpert   ,dlf     ,pflx    ,zdu     ,rprd    , &
                     mu,      md,      du,      eu,      ed,       &
-                    dp,      dsubcld, jt,      maxg,    ideep,    &
+!                   dp,      dsubcld, jt,      maxg,    ideep,    &
+                    dp,      dsubcld, jt,      maxg,    ideep, lengath,  &
                     ql,  rliq, landfrac,                          &
                     org, orgt, zm_org2d,  &
                     dif, dnlf, dnif,  conv, &
                     aero(lchnk), rice)
 
-   lengath = count(ideep > 0)
+!  lengath = count(ideep > 0)
 
    call outfld('CAPE', cape, pcols, lchnk)        ! RBN - CAPE output
+
+  !call outfld('EURT', eurt, pcols, lchnk)        !+tht: entr.rate 2D
+   call outfld('EURT', eurt(1,1), pcols, lchnk)   !+tht: entr.rate 3D 
+
 !
 ! Output fractional occurance of ZM convection
 !

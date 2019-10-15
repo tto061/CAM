@@ -35,6 +35,10 @@ real(r8) :: cldfrc2m_rhmaxi
 real(r8) :: cldfrc2m_rhminis           ! Minimum rh for ice cloud fraction > 0 in the stratsophere.
 real(r8) :: cldfrc2m_rhmaxis
 logical  :: cldfrc2m_do_subgrid_growth = .false.
+real(r8) :: cldfrc2m_qist_min     = 1.e-7_r8      ! Minimum in-stratus ice IWC constraint [ kg/kg ]
+real(r8) :: cldfrc2m_qist_max     = 5.e-3_r8      ! Maximum in-stratus ice IWC constraint [ kg/kg ]
+logical  :: cldfrc2m_smooth       = .false.       ! Smooth minimum in-cloud ice concentration (qist_min)
+
 ! -------------------------- !
 ! Parameters for Ice Stratus !
 ! -------------------------- !
@@ -43,8 +47,8 @@ real(r8),  protected :: rhmaxi_const
 real(r8),  protected :: rhminis_const                 ! Minimum rh for ice cloud fraction > 0.
 real(r8),  protected :: rhmaxis_const
 
-real(r8),  parameter :: qist_min     = 1.e-7_r8      ! Minimum in-stratus ice IWC constraint [ kg/kg ]
-real(r8),  parameter :: qist_max     = 5.e-3_r8      ! Maximum in-stratus ice IWC constraint [ kg/kg ]
+real(r8),  protected :: qist_min != 5.e-6_r8      ! NorESM2.1 default (f09)
+real(r8),  protected :: qist_max != 2.5e-4_r8     ! NorESM2.1 default (f09)
 
 ! ----------------------------- !
 ! Parameters for Liquid Stratus !
@@ -81,7 +85,8 @@ subroutine cldfrc2m_readnl(nlfile)
    integer :: unitn, ierr
    character(len=*), parameter :: subname = 'cldfrc2m_readnl'
 
-   namelist /cldfrc2m_nl/ cldfrc2m_rhmini, cldfrc2m_rhmaxi, cldfrc2m_rhminis, cldfrc2m_rhmaxis, cldfrc2m_do_subgrid_growth
+   namelist /cldfrc2m_nl/ cldfrc2m_rhmini, cldfrc2m_rhmaxi, cldfrc2m_rhminis, cldfrc2m_rhmaxis, cldfrc2m_do_subgrid_growth &
+                         ,cldfrc2m_qist_max ,cldfrc2m_qist_min ,cldfrc2m_smooth
    !-----------------------------------------------------------------------------
 
    if (masterproc) then
@@ -102,6 +107,8 @@ subroutine cldfrc2m_readnl(nlfile)
       rhmaxi_const  = cldfrc2m_rhmaxi
       rhminis_const = cldfrc2m_rhminis
       rhmaxis_const = cldfrc2m_rhmaxis
+      qist_max      = cldfrc2m_qist_max
+      qist_min      = cldfrc2m_qist_min
 
    end if
 
@@ -111,6 +118,9 @@ subroutine cldfrc2m_readnl(nlfile)
    call mpi_bcast(rhminis_const,              1, mpi_real8,  masterprocid, mpicom, ierr)
    call mpi_bcast(rhmaxis_const,              1, mpi_real8,  masterprocid, mpicom, ierr)
    call mpi_bcast(cldfrc2m_do_subgrid_growth, 1, mpi_logical,masterprocid, mpicom, ierr)
+   call mpi_bcast(qist_max                  , 1, mpi_real8,  masterprocid, mpicom, ierr)
+   call mpi_bcast(qist_min                  , 1, mpi_real8,  masterprocid, mpicom, ierr)
+   call mpi_bcast(cldfrc2m_smooth           , 1, mpi_logical,masterprocid, mpicom, ierr)
 
 end subroutine cldfrc2m_readnl
 
@@ -879,7 +889,11 @@ subroutine aist_single(qv, T, p, qi, landfrac, snowh, aist, &
 
            !minimum
            if (icimr.lt.qist_min) then
+            if (cldfrc2m_smooth) then
+              aist = max(0._r8,min(1._r8,sqrt(aist*qi/qist_min)))
+            else
               aist = max(0._r8,min(1._r8,qi/qist_min))
+            endif
            endif
            !maximum
            if (icimr.gt.qist_max) then
@@ -1132,7 +1146,11 @@ subroutine aist_vector(qv_in, T_in, p_in, qi_in, ni_in, landfrac_in, snowh_in, a
 
            !minimum
            if (icimr.lt.qist_min) then
+            if (cldfrc2m_smooth) then
+              aist = max(0._r8,min(1._r8,sqrt(aist*qi/qist_min)))
+            else
               aist = max(0._r8,min(1._r8,qi/qist_min))
+            endif
            endif
            !maximum
            if (icimr.gt.qist_max) then

@@ -872,6 +872,8 @@ subroutine radiation_tend( &
    real(r8):: p_trop(pcols)
 
    logical :: write_output ! switch for outfld calls
+
+   logical, parameter :: cosz_rad_call=.true. !+tht
    !----------------------------------------------------------------------
 
    lchnk = state%lchnk
@@ -914,9 +916,9 @@ subroutine radiation_tend( &
    call get_rlat_all_p(lchnk, ncol, clat)
    call get_rlon_all_p(lchnk, ncol, clon)
    if (use_rad_uniform_angle) then
-     call zenith (calday, clat, clon, coszrs, ncol, dt_avg, uniform_angle=rad_uniform_angle)
+     call zenith (calday, clat, clon, coszrs, ncol, dt_avg, cosz_rad_call, uniform_angle=rad_uniform_angle) !+tht
    else
-     call zenith (calday, clat, clon, coszrs, ncol, dt_avg)
+     call zenith (calday, clat, clon, coszrs, ncol, dt_avg, cosz_rad_call)
    end if
 
    ! Gather night/day column indices.

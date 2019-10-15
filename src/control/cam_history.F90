@@ -2244,36 +2244,36 @@ CONTAINS
     character(len=2) :: avg_suffix
     character(len=max_fieldname_len) :: vec_comp_names(nvecmax)
     character(len=1)                 :: vec_comp_avgflag(nvecmax)
-    !--------------------------------------------------------------------------
 
+    logical, parameter          :: i_am_a_nazi_arse=.false. !+tht if T exit on error
+
+    !
     ! First ensure contents of fincl, fexcl, and fwrtpr are all valid names
     !
     errors_found = 0
     do t=1,ptapes
-
       f = 1
       n_vec_comp       = 0
       vec_comp_names   = ' '
       vec_comp_avgflag = ' '
 fincls: do while (f < pflds .and. fincl(f,t) /= ' ')
         name = getname (fincl(f,t))
-
-        if (.not. dycore_is('FV')) then
-           ! filter out fields only provided by FV dycore
-           do i = 1, n_fv_only
-              if (name == fv_only_flds(i)) then
-                 write(errormsg,'(3a,2(i0,a))')'FLDLST: ', trim(name), &
-                    ' in fincl(', f,', ',t, ') only available with FV dycore'
-                 if (masterproc) then
-                    write(iulog,*) trim(errormsg)
-                    call shr_sys_flush(iulog)
-                 end if
-                 f = f + 1
-                 cycle fincls
-              end if
-           end do
-        end if
-        
+       !+tht: following if block c'd away as likely a bug
+       !if (.not. dycore_is('FV')) then
+       !   ! filter out fields only provided by FV dycore
+       !   do i = 1, n_fv_only
+       !      if (name == fv_only_flds(i)) then
+       !         write(errormsg,'(3a,2(i0,a))')'FLDLST: ', trim(name), &
+       !            ' in fincl(', f,', ',t, ') only available with FV dycore'
+       !         if (masterproc) then
+       !            write(iulog,*) trim(errormsg)
+       !            call shr_sys_flush(iulog)
+       !         end if
+       !         f = f + 1
+       !         cycle fincls
+       !      end if
+       !   end do
+       !end if
         mastername=''
         listentry => get_entry_by_name(masterlinkedlist, name)
         if (associated(listentry)) mastername = listentry%field%name
@@ -2283,6 +2283,8 @@ fincls: do while (f < pflds .and. fincl(f,t) /= ' ')
              write(iulog,*) trim(errormsg)
              call shr_sys_flush(iulog)
           end if
+          fincl(f:pflds-1,t)=fincl(f+1:pflds,t)
+          fincl(pflds,t)=' '
           errors_found = errors_found + 1
         else
            if (len_trim(mastername)>0 .and. interpolate_output(t)) then
@@ -2299,8 +2301,8 @@ fincls: do while (f < pflds .and. fincl(f,t) /= ' ')
                  vec_comp_avgflag(n_vec_comp) = avgflag
               end if
            end if
+           f = f + 1
         end if
-        f = f + 1
       end do fincls
 
       ! Interpolation of vector components requires that both be present.  If the fincl
@@ -2337,16 +2339,18 @@ fincls: do while (f < pflds .and. fincl(f,t) /= ' ')
         mastername=''
         listentry => get_entry_by_name(masterlinkedlist, fexcl(f,t))
         if(associated(listentry)) mastername = listentry%field%name
-
         if (fexcl(f,t) /= mastername) then
           write(errormsg,'(3a,2(i0,a))')'FLDLST: ', trim(fexcl(f,t)), ' in fexcl(', f,', ',t, ') not found'
           if (masterproc) then
              write(iulog,*) trim(errormsg)
              call shr_sys_flush(iulog)
           end if
+          fexcl(f:pflds-1,t)=fexcl(f+1:pflds,t)
+          fexcl(pflds,t)=' '
           errors_found = errors_found + 1
+        else
+          f = f + 1
         end if
-        f = f + 1
       end do
 
       f = 1
@@ -2381,7 +2385,7 @@ fincls: do while (f < pflds .and. fincl(f,t) /= ' ')
        ! Give masterproc a chance to write all the log messages
        call mpi_barrier(mpicom, t)
        write(errormsg, '(a,i0,a)') 'FLDLST: ',errors_found,' errors found, see log'
-       call endrun(trim(errormsg))
+       if (i_am_a_nazi_arse) call endrun(trim(errormsg))
     end if
 
     nflds(:) = 0

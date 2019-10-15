@@ -563,6 +563,18 @@ Chooses level of velocity diffusion.
 Default: 3.0e5
 </entry>
 
+<entry id="fv_high_order_top" type="logical"  category="dyn_fv"
+       group="dyn_fv_inparm" valid_values="" >
+Flag to extend standard 4th-order PPM scheme to model top.
+Default: .false.
+</entry>
+
+<entry id="fv_am_geom_crrct" type="logical"  category="dyn_fv"
+       group="dyn_fv_inparm" valid_values="" >
+Flag to turn on corrections in FV geometry and/or pressure terms.
+Default: .false.
+</entry>
+
 <entry id="fv_am_correction" type="logical"  category="dyn_fv"
        group="dyn_fv_inparm" valid_values="" >
 Flag to turn on corrections that improve angular momentum conservation.
@@ -942,6 +954,13 @@ Relaxation time (hours) applied to specified meteorology.
  - positive values less then time step size gives 100% nudging
  - negative values gives 0.0% nudging (infinite relaxation time)
 Default: 0.0
+</entry>
+
+<entry id="met_nudge_only_uvps" type="logical"  category="dyn_fv_off"
+       group="metdata_nl" valid_values="" >
+if true, nudge only u, v and ps. If false, nudge other fields as well
+(T, Q, TS, SHOWH, TAUX, TAUY, SHFLX, QFLX)
+Default: true
 </entry>
 
 <entry id="met_fix_mass" type="logical"  category="dyn_fv_off"
@@ -2820,6 +2839,25 @@ RHice of 1 down to RHice = rhmini.
 Default: .true. for CAM6; all others =&gt; .false.
 </entry>
 
+<entry id="cldfrc2m_qist_max" type="real" category="conv"
+       group="cldfrc2m_nl" valid_values="" >
+Maximum allowed in-cloud ice concentration.
+Default: set by build-namelist
+</entry>
+
+<entry id="cldfrc2m_qist_min" type="real" category="conv"
+       group="cldfrc2m_nl" valid_values="" >
+Minimum allowed in-cloud ice concentration.
+Default: set by build-namelist
+</entry>
+
+<entry id="cldfrc2m_smooth" type="logical" category="conv"
+       group="cldfrc2m_nl" valid_values="" >
+Use a smooth function instead of a step threshold for minimum in-cloud ice
+Default: .true. for NorESM2.1; all others =&gt; .false.
+</entry>
+
+
 <entry id="zmconv_momcu" type="real" category="conv"
        group="zmconv_nl" valid_values="" >
 Convective momentum transport parameter (upward)
@@ -2875,6 +2913,55 @@ Default: .false.
 The number of negative buoyancy regions that are allowed before the convection top and CAPE calculations are completed.
 Default: =&gt; 1 for CAM6;
          =&gt; 5 for all other
+</entry>
+
+<entry id="zmconv_tdk_lnd" type="real" category="conv"
+       group="zmconv_nl" valid_values="" >
+Tiedke parameter over land.
+Default: =&gt; 1.0 for NorESM2;
+         =&gt; 0.5 for all other
+</entry>
+
+<entry id="zmconv_cin_thrd" type="real" category="conv"
+       group="zmconv_nl" valid_values="" >
+CIN threshold as fraction of CAPE (cf. zmconv_use_cin).
+Default: =&gt; 0.33 for NorESM2;
+         =&gt; not used for all other
+</entry>
+
+<entry id="zmconv_use_cin" type="logical" category="conv"
+       group="zmconv_nl" valid_values="" >
+Use CIN threshold to inhibit convection trigger
+Default: =&gt; .true. for NorESM2;
+         =&gt; .false for all other
+</entry>
+
+<entry id="zmconv_thtweaks" type="logical" category="conv"
+       group="zmconv_nl" valid_values="" >
+Conserve enthalpy under mixing; set launch level al PBL top.
+Default: =&gt; .true. for NorESM2;
+         =&gt; .false for all other
+</entry>
+
+<entry id="zmconv_2nd_call" type="logical" category="conv"
+       group="zmconv_nl" valid_values="" >
+Iterate test-plume calculation, updating entrainment rate.
+Default: =&gt; .true. for NorESM2;
+         =&gt; .false for all other
+</entry>
+
+<entry id="zmconv_retrigger" type="logical" category="conv"
+       group="zmconv_nl" valid_values="" >
+Also update list of active columns after test-plume iteration (if T, zmconv_2nd_call must be T).
+Default: =&gt; .true. for NorESM2;
+         =&gt; .false for all other
+</entry>
+
+<entry id="zmconv_moistherm" type="logical" category="conv"
+       group="zmconv_nl" valid_values="" >
+Use moist thermodynamic parameters (liquid only) in cumulus clouds.
+Default: =&gt; .true. for NorESM2;
+         =&gt; .false for all other
 </entry>
 
 
@@ -3907,6 +3994,7 @@ Default: set by build-namelist
        group="phys_ctl_nl" valid_values="trop_mam3,trop_mam4,trop_mam7,trop_mozart,trop_strat_mam4_vbs,trop_strat_mam4_vbsext,
                                          waccm_ma,waccm_mad_mam4,waccm_ma_mam4,waccm_ma_sulfur,waccm_sc,waccm_sc_mam4,waccm_tsmlt_mam4,
                                          terminator,none" >
+<!--                                     terminator,trop_mam_oslo,none" > -->
 Name of the CAM chemistry package.  N.B. this variable may not be set by
 the user.  It is set by build-namelist via information in the configure
 cache file to be consistent with how CAM was built.
@@ -3998,6 +4086,15 @@ Default: NONE.
        group="ionosphere_nl" valid_values="" >
 Full pathname of AMIE inputs for southern hemisphere.
 Default: NONE.
+</entry>
+
+<!-- Hydrostatic pressure work in mass adjustment -->
+
+<entry id="dme_energy_adjust" type="logical"  category="NorESM"
+       group="phys_ctl_nl" valid_values="" >
+Switch to use appropriate energy adjustment in dry-mass adjustment at the
+end of tphysac.
+Default: .false.
 </entry>
 
 <!-- Reference Pressures -->
@@ -5308,7 +5405,6 @@ Full pathname of the ac_CO2 file specified in the filelist in
 get this name into the cam.input_data_list for the CESM scripts.
 Default: set by build-namelist.
 </entry>
-
 
 
 <entry id="gcr_ionization_datapath" type="char*256" input_pathname="abs" category="cam_chem"
@@ -7049,6 +7145,12 @@ Default: FALSE
        group="seq_cplflds_inparm" valid_values="" >
 Default: FALSE
 </entry>
+<!--
+<entry id="flds_co2_dmsb" type="logical"  category="driver"
+       group="seq_cplflds_inparm" valid_values="" >
+Default: FALSE
+</entry>
+     -->
 <entry id="cplflds_custom" type="char*80"  category="driver"
        group="seq_cplflds_userspec" valid_values="" >
 Default:
@@ -7716,5 +7818,59 @@ Default: none
 List of filepaths for dataset for offline unit driver.
 Default: none
 </entry>
+
+<!-- CAM-Oslo variables  -->
+<!--
+<entry id="volc_fraction_coarse" type="real" category="cam_oslo"
+       group="oslo_ctl_nl" valid_values="" >
+Fraction of volcanic aerosols which will end up in coarse mode 
+Default: 0.0
+</entry>
+<entry id="aerotab_table_dir" type="char*256" input_pathname="abs" category="cam_oslo"
+       group="oslo_ctl_nl" valid_values="" >
+Directory where we will expect to find the CAM-Oslo tables
+created from AeroTab
+</entry>
+<entry id="dms_source" type="char*20" category="cam_oslo"
+       group="oslo_ctl_nl" valid_values="" >
+Type of DMS data source
+Default: emission_file
+</entry>
+<entry id="dms_source_type" type="char*32" category="cam_oslo"
+       group="oslo_ctl_nl" valid_values="" >
+Type of DMS data source type
+Default: CYCLICAL
+</entry>
+<entry id="dms_cycle_year" type="integer" category="cam_oslo"
+       group="oslo_ctl_nl" valid_values="" >
+DMS cycle year
+Default: 2000
+</entry>
+<entry id="opom_source" type="char*20" category="cam_oslo"
+       group="oslo_ctl_nl" valid_values="" >
+Type of ocean POM data source
+Default: no_file
+</entry>
+<entry id="opom_source_type" type="char*32" category="cam_oslo"
+       group="oslo_ctl_nl" valid_values="" >
+Type of ocean POM data source type
+Default: CYCLICAL
+</entry>
+<entry id="opom_cycle_year" type="integer" category="cam_oslo"
+       group="oslo_ctl_nl" valid_values="" >
+Ocean POM cycle year
+Default: 2000
+</entry>
+<entry id="ocean_filename" type="char*256" input_pathname="rel:ocean_filepath" category="cam_oslo"
+       group="oslo_ctl_nl" valid_values="" >
+Filename for ocean concentration of DMS, chlorophyll and poc
+Default: name
+</entry>
+<entry id="ocean_filepath" type="char*256" input_pathname="abs" category="cam_oslo"
+       group="oslo_ctl_nl" valid_values="" >
+Path to ocean file
+Default: path
+</entry>
+-->
 
 </namelist_definition>
